@@ -10,7 +10,7 @@ var Game = {
 };
 
 window.addEventListener('load', function() {
-  var game = new Phaser.Game(736, 672, Phaser.AUTO, 'container');
+  var game = new Phaser.Game(736, 640, Phaser.CANVAS, 'container');
   window.game = game;
 
   game.state.add('boot', Game.Boot);
@@ -119,18 +119,50 @@ module.exports = Gun;
 },{"./bullet":2}],4:[function(require,module,exports){
 'use strict';
 
-var Player = function(game, x, y, frame) {
-  Phaser.Sprite.call(this, game, x, y, 'dude', frame);
+var Player = function(game, x, y) {
+  Phaser.Group.call(this, game);
+  // this.anchor.setTo(0.5, 0.5);
 
-  this.anchor.setTo(0.5, 0.5);
+  this.x = x;
+  this.y = y;
 
-  this.game.physics.p2.enableBody(this);
+
+  this.head = new Phaser.Sprite(game, 0, 0, 'player', 0);
+  this.body = new Phaser.Sprite(game, 0, 11, 'player', 1);
+  this.legs = new Phaser.Sprite(game, 0, 19, 'player', 2);
+
+  this.jetpack = new Phaser.Sprite(game, 0, 17, 'player', 10);
+  this.exhaust = new Phaser.Sprite(game, 0, 20, 'player', 16);
+  this.gun = new Phaser.Sprite(game, 0, 13, 'player', 8);
+
+  this.head.anchor.set(0.5);
+  this.body.anchor.set(0.5);
+  this.legs.anchor.set(0.5);
+  this.jetpack.anchor.set(0.5);
+  this.exhaust.anchor.set(0.5);
+  this.gun.anchor.set(0.5);
+
+  this.exhaust.animations.add('exhaust', [16, 17, 18, 19, 20, 21], 10, true);
+  this.exhaust.animations.play('exhaust');
+
+  this.addMultiple([
+    this.jetpack,
+    this.exhaust,
+    this.legs,
+    this.body,
+    this.head,
+    this.gun,
+  ]);
 };
 
-Player.prototype = Object.create(Phaser.Sprite.prototype);  
+Player.prototype = Object.create(Phaser.Group.prototype);  
 Player.prototype.constructor = Player;
 
 Player.prototype.update = function() {
+  var dx = this.game.input.x - this.x;
+  var dy = this.game.input.y - this.y;
+        
+  this.gun.rotation = Math.atan2(dy, dx);
 };
 
 module.exports = Player;
@@ -214,20 +246,20 @@ Play.prototype.preload = function() {
 };  
 
 Play.prototype.create = function() {
-  // this.player = new Player(this.game, 100, 100);
-  // this.game.add.existing(this.player);
-
   this.world = new World(this.game, 'dev');
   this.world.create();
 
-  this.gun = new Gun(this.game, 150, 150);
-  this.game.add.existing(this.gun);
+  this.player = new Player(this.game, 100, 100);
+  this.game.add.existing(this.player);
+
+  // this.gun = new Gun(this.game, 150, 150);
+  // this.game.add.existing(this.gun);
 };
 
 Play.prototype.update = function() {
-  this.world.update();
+  // this.world.update();
 
-  this.gun.update();
+  // this.gun.update();
 };
 
 module.exports = Play;
@@ -257,6 +289,7 @@ Preload.prototype.preload = function() {
 
   this.game.load.spritesheet('tileset', 'assets/tileset.png', 32, 32);
   this.game.load.spritesheet('dude', 'assets/dude.png', 32, 32);
+  this.game.load.spritesheet('player', 'assets/player.png', 32, 32);
   this.game.load.spritesheet('bullet', 'assets/bullet.png', 16, 16);
   this.game.load.image('gun', 'assets/gun.png');
   this.game.load.image('muzzleFlash', 'assets/muzzleFlash.png');
