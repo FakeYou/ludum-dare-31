@@ -9,7 +9,7 @@ var Game = {
 };
 
 window.addEventListener('load', function() {
-  var game = new Phaser.Game(720, 600, Phaser.AUTO, 'container');
+  var game = new Phaser.Game(736, 640, Phaser.AUTO, 'container');
   window.game = game;
 
   game.state.add('boot', Game.Boot);

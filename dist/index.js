@@ -10,7 +10,7 @@ var Game = {
 };
 
 window.addEventListener('load', function() {
-  var game = new Phaser.Game(720, 600, Phaser.AUTO, 'container');
+  var game = new Phaser.Game(736, 672, Phaser.AUTO, 'container');
   window.game = game;
 
   game.state.add('boot', Game.Boot);
@@ -19,7 +19,156 @@ window.addEventListener('load', function() {
 
   game.state.start('boot');
 });
-},{"./lib/states/boot":2,"./lib/states/play":3,"./lib/states/preload":4,"underscore":5}],2:[function(require,module,exports){
+},{"./lib/states/boot":6,"./lib/states/play":7,"./lib/states/preload":8,"underscore":9}],2:[function(require,module,exports){
+'use strict';
+
+var Bullet = function(game, x, y, rotation) {
+  Phaser.Sprite.call(this, game, x, y, 'bullet', 1);
+
+  rotation += (Math.random() - 0.5) / 4;
+
+  this.game.physics.p2.enableBody(this);
+  this.rotation = rotation;
+  this.body.rotation = rotation;
+  this.body.fixedRotation = true;
+  this.body.setCollisionGroup(game.collisionGroups.bullets);
+  this.body.collides(game.collisionGroups.world);
+
+  this.body.onBeginContact.add(this.hit, this);
+
+  this.animations.add('flash', 0, 10, false);
+  this.animations.add('fly', [1,2,3], 10, true);
+
+  this.animations.play('fly');
+  // this.events.onAnimationComplete.add(function() {
+  //   this.animations.play('fly');
+  // }, this);
+};
+
+Bullet.prototype = Object.create(Phaser.Sprite.prototype);  
+Bullet.prototype.constructor = Bullet;
+
+Bullet.prototype.update = function() {
+  this.body.moveForward(-750);
+};
+
+Bullet.prototype.hit = function() {
+  this.body.removeFromWorld();
+  this.destroy();
+};
+
+module.exports = Bullet;
+},{}],3:[function(require,module,exports){
+'use strict';
+
+var Bullet = require('./bullet');
+
+var Gun = function(game, x, y) {
+  Phaser.Sprite.call(this, game, x, y, 'gun');
+
+  this.anchor.setTo(0, -1);
+  this.scale.set(0.5);
+
+  this.game.physics.p2.enableBody(this, false);
+
+  this.body.setCollisionGroup(game.collisionGroups.guns);
+  this.body.collides(game.collisionGroups.world);
+
+  this.cursors = game.input.keyboard.createCursorKeys();
+  this.game.input.onDown.add(this.shoot, this);
+  this.game.input.onUp.add(this.shoot, this);
+
+  this.shooting = false;
+
+  this.muzzleFlash = game.add.sprite(0, 120, 'muzzleFlash');
+  this.muzzleFlash.anchor.setTo(1, 0.5);
+  this.muzzleFlash.angle = 90;
+  this.muzzleFlash.visible = false;
+  this.addChild(this.muzzleFlash);
+};
+
+Gun.prototype = Object.create(Phaser.Sprite.prototype);  
+Gun.prototype.constructor = Gun;
+
+Gun.prototype.update = function() {
+  this.faceMouse();
+
+  if(this.shooting) {
+    this.body.thrust(40);
+  }
+};
+
+Gun.prototype.shoot = function() {
+  this.muzzleFlash.visible = !this.muzzleFlash.visible;
+  this.shooting = !this.shooting;
+
+  if(this.shooting) {
+    var bullet = new Bullet(this.game, this.body.x, this.body.y, this.body.rotation);
+    this.game.add.existing(bullet);
+  }
+};
+
+Gun.prototype.faceMouse = function() {
+  var dx = this.game.input.x - this.x;
+  var dy = this.game.input.y - this.y;
+        
+  this.body.rotation = Math.atan2(dy, dx) - Math.PI/2;
+};
+
+module.exports = Gun;
+},{"./bullet":2}],4:[function(require,module,exports){
+'use strict';
+
+var Player = function(game, x, y, frame) {
+  Phaser.Sprite.call(this, game, x, y, 'dude', frame);
+
+  this.anchor.setTo(0.5, 0.5);
+
+  this.game.physics.p2.enableBody(this);
+};
+
+Player.prototype = Object.create(Phaser.Sprite.prototype);  
+Player.prototype.constructor = Player;
+
+Player.prototype.update = function() {
+};
+
+module.exports = Player;
+},{}],5:[function(require,module,exports){
+'use strict';
+
+var _ = require('underscore');
+
+var World = function(game, level) {
+  this.game = game;
+  this.level = level;
+};
+
+World.prototype.create = function() {
+  var self = this;
+
+  this.map = this.game.add.tilemap(this.level);
+  this.map.addTilesetImage('tileset');
+
+  this.ground = this.map.createLayer('ground');
+  this.ground.resizeWorld();
+
+  this.map.setCollision(3, true, this.ground);
+  this.game.physics.p2.convertTilemap(this.map, this.ground);
+
+  _.each(this.ground.layer.bodies, function(body) {
+    body.setCollisionGroup(self.game.collisionGroups.world);
+    body.collides(self.game.collisionGroups.guns);
+    body.collides(self.game.collisionGroups.bullets);
+  });
+};
+
+World.prototype.update = function() {
+
+};
+
+module.exports = World;
+},{"underscore":9}],6:[function(require,module,exports){
 'use strict';
 
 var Boot = function(game) {
@@ -38,24 +187,51 @@ Boot.prototype.create = function() {
 };
 
 module.exports = Boot;
-},{}],3:[function(require,module,exports){
+},{}],7:[function(require,module,exports){
 'use strict';
+
+// var _ = require('underscore');
+var Player = require('../entities/player');
+var World = require('../entities/world');
+var Gun = require('../entities/gun');
 
 var Play = function(game) {
   this.game = game;
 };
 
 Play.prototype.preload = function() {
+  this.game.physics.startSystem(Phaser.Physics.P2JS);
+  this.game.physics.p2.setImpactEvents(true);
+  this.game.physics.p2.defaultRestitution = 0.8;
+
+  this.game.collisionGroups = {
+    'guns': this.game.physics.p2.createCollisionGroup(),
+    'bullets': this.game.physics.p2.createCollisionGroup(),
+    'world': this.game.physics.p2.createCollisionGroup(),
+  };
+
+  this.game.physics.p2.updateBoundsCollisionGroup();
 };  
 
 Play.prototype.create = function() {
+  // this.player = new Player(this.game, 100, 100);
+  // this.game.add.existing(this.player);
+
+  this.world = new World(this.game, 'dev');
+  this.world.create();
+
+  this.gun = new Gun(this.game, 150, 150);
+  this.game.add.existing(this.gun);
 };
 
 Play.prototype.update = function() {
+  this.world.update();
+
+  this.gun.update();
 };
 
 module.exports = Play;
-},{}],4:[function(require,module,exports){
+},{"../entities/gun":3,"../entities/player":4,"../entities/world":5}],8:[function(require,module,exports){
 'use strict';
 
 var Preload = function(game) {
@@ -78,6 +254,13 @@ Preload.prototype.preload = function() {
   this.progressBar.x = this.world.centerX;
 
   this.load.setPreloadSprite(this.progressBar);
+
+  this.game.load.spritesheet('tileset', 'assets/tileset.png', 32, 32);
+  this.game.load.spritesheet('dude', 'assets/dude.png', 32, 32);
+  this.game.load.spritesheet('bullet', 'assets/bullet.png', 16, 16);
+  this.game.load.image('gun', 'assets/gun.png');
+  this.game.load.image('muzzleFlash', 'assets/muzzleFlash.png');
+  this.game.load.tilemap('dev', 'assets/levels/dev.json', null, Phaser.Tilemap.TILED_JSON);
 };
 
 Preload.prototype.create = function() {
@@ -91,7 +274,7 @@ Preload.prototype.update = function() {
 };
 
 module.exports = Preload;
-},{}],5:[function(require,module,exports){
+},{}],9:[function(require,module,exports){
 //     Underscore.js 1.7.0
 //     http://underscorejs.org
 //     (c) 2009-2014 Jeremy Ashkenas, DocumentCloud and Investigative Reporters & Editors
